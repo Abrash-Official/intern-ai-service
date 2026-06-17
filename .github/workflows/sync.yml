@@ -1,0 +1,51 @@
+name: Push to Production PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_message:
+        description: 'Message for the Production PR'
+        required: true
+        default: 'Automated sync from Intern Repo'
+
+jobs:
+  create-prod-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Intern Repo
+        uses: actions/checkout@v4
+        with:
+          path: intern-repo
+
+      - name: Checkout Production Repo
+        uses: actions/checkout@v4
+        with:
+          repository: Abrash-Official/prod-ai-service
+          token: ${{ secrets.PROD_REPO_PAT }}
+          path: prod-repo
+
+      - name: Sync Files
+        run: |
+          rsync -av --exclude='.git' --exclude='.github' intern-repo/ prod-repo/
+
+      - name: Create Pull Request in Prod
+        env:
+          GH_TOKEN: ${{ secrets.PROD_REPO_PAT }}
+        run: |
+          cd prod-repo
+          
+          git config user.name "GitHub Action Sync"
+          git config user.email "action@github.com"
+          
+          BRANCH_NAME="intern-sync-$(date +%s)"
+          git checkout -b $BRANCH_NAME
+          
+          git add .
+          git commit -m "${{ github.event.inputs.commit_message }}"
+          git push origin $BRANCH_NAME
+          
+          gh pr create \
+            --title "🚀 Sync Updates from Intern Team" \
+            --body "Automated PR generated after testing the intern repository." \
+            --base main \
+            --head $BRANCH_NAME
